@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>青县学术·伦理·法治 互动地图</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 百度地图API -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=1.0&type=webgl&ak=X0m8PibfjI6CMfpgMyNc6vXrQrVivfXQ"></script>
+    <!-- Tailwindwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af', // 蓝色 - 法治与理性
+                        secondary: '#b91c1c', // 红色 - 传统与热情
+                        tertiary: '#065f46', // 绿色 - 创新与和谐
+                        quaternary: '#92400e', // 棕色 - 文化与传承
+                        light: '#f8fafc',
+                        dark: '#1e293b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-blur {
+                backdrop-filter: blur(8px);
+            }
+        }
+    </style>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #map-container {
+            height: 100vh;
+            width: 100%;
+            z-index: 1;
+            position: relative;
+        }
+        .custom-marker {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .info-window {
+            max-width: 350px;
+            overflow: hidden;
+        }
+        .info-window img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+        }
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+        .floating-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            backdrop-filter: blur(8px);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        .category-filter {
+            margin-bottom: 15px;
+        }
+        .category-filter label {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .category-filter label:hover {
+            transform: translateX(5px);
+        }
+        .upload-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .story-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 25px;
+            backdrop-filter: blur(8px);
+            max-width: 500px;
+            display: none;
+        }
+        .story-line.active {
+            display: block;
+        }
+        .close-story {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .progress-bar {
+            height: 4px;
+            background-color: #e2e8f0;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #1e40af;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background-color: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+        .prev-btn {
+            left: 20px;
+        }
+        .next-btn {
+            right: 20px;
+        }
+        /* 自定义点位标签样式 - 包含分类标识 */
+        .custom-label {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            white-space: nowrap;
+            border-left: 3px solid;
+        }
+        .category-badge {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 6px;
+            color: white;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<!-- 地图容器 -->
+<div id="map-container"></div>
+
+<!-- 左侧面板 -->
+<div class="floating-panel w-72">
+    <h1 class="text-2xl font-bold text-primary mb-4 text-shadow">青县学术·伦理·法治</h1>
+    <p class="text-gray-600 mb-6">探索青县"道德青县·爱心之城"品牌建设与实践案例</p>
+
+    <!-- 分类筛选 -->
+    <div class="category-filter">
+        <h2 class="text-lg font-semibold mb-3 text-dark">维度筛选</h2>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="morality" checked>
+                <span class="category-icon bg-quaternary text-white">
+                        <i class="fa fa-heart"></i>
+                    </span>
+                <span>道德文化传承</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="rule" checked>
+                <span class="category-icon bg-primary text-white">
+                        <i class="fa fa-gavel"></i>
+                    </span>
+                <span>法治建设实践</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="values" checked>
+                <span class="category-icon bg-secondary text-white">
+                        <i class="fa fa-star"></i>
+                    </span>
+                <span>核心价值观践行</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="culture" checked>
+                <span class="category-icon bg-tertiary text-white">
+                        <i class="fa fa-university"></i>
+                    </span>
+                <span>特色文化传承</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">关键词搜索</h2>
+        <div class="relative">
+            <input type="text" id="search-input" placeholder="输入关键词搜索点位..."
+                   class="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+        </div>
+    </div>
+
+    <!-- 主题故事线 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">主题故事线</h2>
+        <button id="story-btn" class="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
+            <i class="fa fa-book mr-2"></i> 探索"道德青县"传承之旅
+        </button>
+    </div>
+</div>
+
+<!-- 上传按钮 -->
+<button class="upload-btn bg-secondary text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition-colors">
+    <i class="fa fa-plus text-xl"></i>
+</button>
+
+<!-- 故事线弹窗 -->
+<div class="story-line" id="story-line">
+        <span class="close-story text-gray-500 hover:text-gray-700">
+            <i class="fa fa-times"></i>
+        </span>
+    <h2 class="text-2xl font-bold text-primary mb-4" id="story-title">价值观传承之旅</h2>
+    <div class="progress-bar">
+        <div class="progress" id="story-progress" style="width: 0%"></div>
+    </div>
+    <div id="story-content" class="mb-6">
+        <!-- 故事线内容将通过JS动态生成 -->
+    </div>
+    <div class="flex justify-between">
+        <button id="prev-story" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            <i class="fa fa-arrow-left mr-2"></i> 上一站
+        </button>
+        <button id="next-story" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors">
+            下一站 <i class="fa fa-arrow-right ml-2"></i>
+        </button>
+    </div>
+</div>
+
+<!-- 导航按钮 -->
+<button class="nav-btn prev-btn" id="prev-btn">
+    <i class="fa fa-chevron-left"></i>
+</button>
+<button class="nav-btn next-btn" id="next-btn">
+    <i class="fa fa-chevron-right"></i>
+</button>
+
+<script>
+    // 青县坐标：38.5449° N, 116.8207° E
+    // 点位数据
+    const points = [
+        {
+            id: 1,
+            name: "青县公民道德建设展馆",
+            category: "morality",
+            categoryName: "道德文化传承",
+            location: {lat: 38.5449, lng: 116.8207},
+            address: "河北省沧州市青县清州镇",
+            description: "青县公民道德建设展馆是展示青县道德建设成果的重要窗口，馆内展示了青县历年道德模范事迹，包括全国道德模范提名奖获得者、中国好人、河北好人等先进典型的感人事迹。",
+            image: "https://p11-doubao-search-sign.byteimg.com/labis/7a5b1658e4f96cbb52747ce9ac06e63d~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=Ul63ye33aU5RB1O6A1tGgR%2BTY28%3D",
+            video: "",
+            audio: "",
+            interpretation: "青县公民道德建设展馆是青县'道德青县·爱心之城'品牌建设的重要载体，通过展示道德模范事迹，弘扬社会主义核心价值观，引导市民向善向好。截至目前，青县共1人获全国道德模范提名奖，1个家庭获全国文明家庭称号，32人荣登'中国好人榜'，8人获河北省道德模范及提名奖称号，其他受到国家和省市表彰的先进典型400多人（次）。",
+            storyOrder: 1,
+            storyDescription: "我们的'道德青县'传承之旅从青县公民道德建设展馆开始，这里展示了青县历年道德模范事迹，包括全国道德模范提名奖获得者、中国好人、河北好人等先进典型的感人事迹。展馆通过图文并茂的方式，生动展现了青县人在道德实践中的榜样力量。"
+        },
+        {
+            id: 2,
+            name: "青县流河镇人和镇村孝老食堂",
+            category: "morality",
+            categoryName: "道德文化传承",
+            location: {lat: 38.5649, lng: 116.8407},
+            address: "河北省沧州市青县流河镇人和镇村",
+            description: "人和镇村孝老食堂成立于2020年，为十多名70岁以上老年人提供一日三餐免费服务，解除了老年人的吃饭问题和老人子女们的后顾之忧。2022年，该村又建成青县第一家'孝老洗衣房'，为周边12个村的100多位老人们提供免费洗衣服务。",
+            image: "https://p3-doubao-search-sign.byteimg.com/labis/8752a07af2682ed15752cf04198d99db~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=O%2FHaoDs%2FKcyfxLK96f3qUgUITaQ%3D",
+            video: "",
+            audio: "",
+            interpretation: "孝老食堂是青县推进农村养老服务的创新举措，体现了'老吾老，以及人之老'的传统美德。目前，青县的'孝老食堂'已经建成201个，覆盖全县60%以上的行政村。县财政投资4200余万元，撬动社会投资600余万元，390家爱心企业、9800余名群众为'爱心小屋''孝老食堂'捐款捐物超过1300万元，形成了政府投入为主、多渠道筹措为辅的多元投入机制。",
+            storyOrder: 2,
+            storyDescription: "第二站我们来到流河镇人和镇村孝老食堂，这里为70岁以上老年人提供一日三餐免费服务，解除了老年人的吃饭问题和老人子女们的后顾之忧。目前，青县的'孝老食堂'已经建成201个，覆盖全县60%以上的行政村，成为青县'道德青县'建设的生动实践。"
+        },
+        {
+            id: 3,
+            name: "青县人民法院",
+            category: "rule",
+            categoryName: "法治建设实践",
+            location: {lat: 38.5349, lng: 116.8107},
+            address: "河北省沧州市青县清州镇振兴路",
+            description: "青县人民法院积极推进司法体制改革，加强审判执行工作规范化建设，提升司法服务水平。2024年，青县法院共受理各类案件7049件，审（执）结案6841件，为县域经济社会高质量发展提供有力的司法保障。",
+            image: "https://p11-doubao-search-sign.byteimg.com/pgc-image/7a737205cae74b8aa7aa5fd008dd6f57~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=%2FFgRAg2bfiD7khtluV1wd%2B7blic%3D",
+            video: "",
+            audio: "",
+            interpretation: "青县人民法院在推进法治政府建设中发挥了重要作用，通过依法严惩各类刑事犯罪、积极妥善化解民商事纠纷、监督支持依法行政、多措并举解决执行难等工作，为青县经济社会发展提供了有力的司法保障。特别是在服务京津冀协同发展大局方面，青县法院与周边地区法院签署司法协作框架协议，将地缘优势转变为协作优势。",
+            storyOrder: 3,
+            storyDescription: "第三站我们来到青县人民法院，这里是青县法治建设的重要窗口。青县法院通过依法严惩各类刑事犯罪、积极妥善化解民商事纠纷、监督支持依法行政、多措并举解决执行难等工作，为青县经济社会发展提供了有力的司法保障。特别是在服务京津冀协同发展大局方面，青县法院与周边地区法院签署司法协作框架协议，将地缘优势转变为协作优势。"
+        },
+        {
+            id: 4,
+            name: "青县行政执法智慧监督平台",
+            category: "rule",
+            categoryName: "法治建设实践",
+            location: {lat: 38.5549, lng: 116.8307},
+            address: "河北省沧州市青县清州镇",
+            description: "青县行政执法智慧监督平台是青县司法局创新开发的小程序，实现对各行政执法单位入企执法'事前、事中、事后'全链条监督，让执法留痕、有迹可循，有效避免任意执法、扰企执法，促进严格规范公正文明执法。",
+            image: "https://p11-doubao-search-sign.byteimg.com/pgc-image/21c720e762f94bbe855f4e308a76c0af~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=QNyihkUVMHDxfLCtveJlhQez43s%3D",
+            video: "",
+            audio: "",
+            interpretation: "青县行政执法智慧监督平台是青县推进法治政府建设的创新举措，通过互联网技术实现了对行政执法的全链条监督。平台具有执法人员主体适格、行政执法实时监督、投诉举报便捷高效、行政复议网上申请、数据分析清晰直观等功能，有效推动了全县行政执法工作的规范化、透明化、高效化。",
+            storyOrder: null
+        },
+        {
+            id: 5,
+            name: "青县新时代文明实践中心",
+            category: "values",
+            categoryName: "核心价值观践行",
+            location: {lat: 38.5249, lng: 116.8007},
+            address: "河北省沧州市青县清州镇",
+            description: "青县新时代文明实践中心是推进新时代中国特色社会主义思想深入人心、落地生根的重要载体，通过开展各类文明实践活动，弘扬社会主义核心价值观。全县各乡镇均建有新时代文明实践所(站)，开展各具特色的文明实践活动。",
+            image: "https://p11-doubao-search-sign.byteimg.com/tos-cn-i-6w9my0ksvp/6045f69262a54aef9a3f9716109925fb~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404477&x-signature=6NYXo0IAd9QTBmKFgY50A4J8hAo%3D",
+            video: "",
+            audio: "",
+            interpretation: "青县新时代文明实践中心是社会主义核心价值观宣传教育的重要阵地，通过开展理论宣讲、文化活动、志愿服务等多种形式的文明实践活动，使社会主义核心价值观内化于心、外化于行。各乡镇结合自身实际推出了'孝老敬老，情暖桑榆'、'基层治理 网格聚力'、'移风易俗 倡树新风'等特色项目，将文明实践作为传递爱心、传播文明、弘扬社会主义核心价值观的生动实践和有效载体。",
+            storyOrder: 4,
+            storyDescription: "我们的最后一站是青县新时代文明实践中心，这里是推进新时代中国特色社会主义思想深入人心、落地生根的重要载体。全县各乡镇均建有新时代文明实践所(站)，开展各具特色的文明实践活动，如'孝老敬老，情暖桑榆'、'基层治理 网格聚力'、'移风易俗 倡树新风'等，将文明实践作为传递爱心、传播文明、弘扬社会主义核心价值观的生动实践和有效载体。"
+        },
+        {
+            id: 6,
+            name: "青县盘古庙",
+            category: "culture",
+            categoryName: "特色文化传承",
+            location: {lat: 38.5749, lng: 116.8507},
+            address: "河北省沧州市青县盘古镇",
+            description: "青县盘古庙是盘古文化的重要载体，至今保留着盘古墓、盘古井、盘古沟等遗迹群，民间流传着丰富的盘古神话传说。大、小盘古村因盘古择居传说得名，村民世代口述开天辟地的故事，延续着对自然与生命的敬畏。",
+            image: "https://p11-doubao-search-sign.byteimg.com/tos-cn-i-6w9my0ksvp/7e6d1a72d0d94d8a80a6b768ee8ab39c~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404477&x-signature=x%2Fd4o6jb%2BErzka5hl%2B9gKQQDgMc%3D",
+            video: "",
+            audio: "",
+            interpretation: "盘古文化是青县最具特色的文化资源之一，2006年入选首批省级非物质文化遗产。盘古庙会、盘古梨花节等民俗活动成为连接古今的文化纽带。青县通过举办盘古文化节等活动，传承和弘扬盘古开天辟地、自强不息的精神，将传统文化与现代文明相结合，为青县文化建设注入了新的活力。",
+            storyOrder: null
+        },
+        {
+            id: 7,
+            name: "青县中古红木文化小镇",
+            category: "culture",
+            categoryName: "特色文化传承",
+            location: {lat: 38.5149, lng: 116.7907},
+            address: "河北省沧州市青县马厂镇",
+            description: "中古红木文化小镇是青县红木文化的重要展示窗口，白墙黛瓦的建筑群，大运河红木文化馆通过模型、展板及数字技术，全景式展现红木雕刻技艺的传承脉络。青县是全国最大的'京作'基地，全国六大专业市场之一，2012年被誉为'中国红木家具之乡''中国古运河古家具之都'称号。",
+            image: "https://p26-doubao-search-sign.byteimg.com/labis/07a237594416e007bb724bb5f78f7f7d~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404477&x-signature=3RQ98zFT3zB85Z7zkYTJo%2Bku18k%3D",
+            video: "",
+            audio: "",
+            interpretation: "红木文化是青县另一张重要的文化名片，被誉为'大运河漂来的文化'。依托京杭大运河的商贸脉络，明清时期红木沿河北上，在青县经匠人精雕细琢下，形成独具特色的'京作家具'工艺。青县始终坚持以'传承精髓，精品精作'为核心理念，推动红木产业集群发展，将传统工艺转化为富民产业，实现了文化传承与经济发展的双赢。",
+            storyOrder: null
+        },
+        {
+            id: 8,
+            name: "青县回民中学",
+            category: "morality",
+            categoryName: "道德文化传承",
+            location: {lat: 38.5049, lng: 116.7807},
+            address: "河北省沧州市青县清州镇",
+            description: "青县回民中学是青县道德教育的重要基地，以全国优秀教师戴俊秀的事迹为榜样，开展道德教育活动。戴俊秀老师带病教学，在批改作业的宿舍里不幸去世，她的事迹被广泛传颂，成为青县道德教育的重要素材。",
+            image: "https://p11-doubao-search-sign.byteimg.com/labis/82a4e532be53d2e3ff506aa4ad8351ff~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=WtenwuR537TDqK8DI1Rd%2BT8nPmw%3D",
+            video: "",
+            audio: "",
+            interpretation: "青县回民中学通过传承和弘扬戴俊秀老师的先进事迹，将道德教育融入日常教学中，培养学生的道德素养和社会责任感。戴俊秀老师的事迹不仅是青县道德建设的重要组成部分，也是社会主义核心价值观在教育领域的生动实践。",
+            storyOrder: null
+        }
+    ];
+
+    // 定义颜色映射
+    const categoryColors = {
+        morality: '#92400e', // 棕色 - 道德文化传承
+        rule: '#1e40af',    // 蓝色 - 法治建设实践
+        values: '#b91c1c',  // 红色 - 核心价值观践行
+        culture: '#065f46'  // 绿色 - 特色文化传承
+    };
+
+    // 定义图标映射
+    const categoryIcons = {
+        morality: 'fa-heart',
+        rule: 'fa-gavel',
+        values: 'fa-star',
+        culture: 'fa-university'
+    };
+
+    // 初始化地图
+    var map;
+    function initMap() {
+        try {
+            map = new BMapGL.Map("map-container");
+            var point = new BMapGL.Point(116.8207, 38.5449); // 青县中心点
+            map.centerAndZoom(point, 13);
+            map.enableScrollWheelZoom(true);
+            console.log("地图初始化成功");
+
+            // 地图加载完成后创建点位标记
+            map.addEventListener('tilesloaded', function() {
+                console.log("地图加载完成，开始创建点位标记");
+                createMarkers();
+            });
+        } catch (error) {
+            console.error("地图初始化失败:", error);
+            alert("地图加载失败: " + error.message);
+        }
+    }
+
+    // 创建点位标记和带分类标识的标签
+    const markers = {};
+    const labels = {}; // 存储标签引用
+    function createMarkers() {
+        try {
+            points.forEach(point => {
+                // 增大图标尺寸以确保显示完整
+                const iconSize = new BMapGL.Size(30, 40);
+                const icon = new BMapGL.Icon("http://api.map.baidu.com/img/markers.png", iconSize, {
+                    offset: new BMapGL.Size(15, 40), // 调整偏移量确保图标底部对准坐标点
+                    imageOffset: new BMapGL.Size(0, 0 - 40 * 0) // 默认使用红色图标
+                });
+
+                // 根据类别设置不同颜色
+                const iconColor = categoryColors[point.category];
+                if (iconColor === '#92400e') { // 棕色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 3));
+                } else if (iconColor === '#1e40af') { // 蓝色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 1));
+                } else if (iconColor === '#b91c1c') { // 红色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 0));
+                } else if (iconColor === '#065f46') { // 绿色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 2));
+                }
+
+                // 创建标记
+                const marker = new BMapGL.Marker(new BMapGL.Point(point.location.lng, point.location.lat), {
+                    icon: icon
+                });
+
+                // 创建带分类标识的自定义标签
+                // 使用HTML内容创建包含分类图标的标签
+                const labelContent = `
+                    <div class="custom-label" style="border-left-color: ${iconColor}">
+                        <span class="category-badge" style="background-color: ${iconColor}">
+                            <i class="fa ${categoryIcons[point.category]}"></i>
+                        </span>
+                        ${point.name}
+                    </div>
+                `;
+
+                const label = new BMapGL.Label(labelContent, {
+                    offset: new BMapGL.Size(-80, 40), // 标签位置在图标下方
+                    position: new BMapGL.Point(point.location.lng, point.location.lat)
+                });
+
+                // 设置标签样式，允许HTML内容
+                label.setStyle({
+                    border: "none",
+                    padding: "0",
+                    margin: "0",
+                    zIndex: "100"
+                });
+                label.setContent(labelContent); // 再次设置内容以确保HTML生效
+
+                // 添加点击事件
+                marker.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+                // 标签也可点击
+                label.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+
+                // 添加到地图
+                map.addOverlay(marker);
+                map.addOverlay(label);
+
+                // 保存标记和标签引用
+                markers[point.id] = marker;
+                labels[point.id] = label;
+            });
+            console.log("点位标记创建成功，共创建", points.length, "个点位");
+        } catch (error) {
+            console.error("创建点位标记失败:", error);
+            alert("点位加载失败: " + error.message);
+        }
+    }
+
+    // 显示信息窗口
+    function showInfoWindow(point) {
+        // 创建信息窗口内容
+        const content = `
+                <div class="info-window">
+                    <img src="${point.image}" alt="${point.name}">
+                    <div class="p-4">
+                        <div class="flex items-center mb-2">
+                            <span class="category-icon bg-${point.category === 'morality' ? 'quaternary' : point.category === 'rule' ? 'primary' : point.category === 'values' ? 'secondary' : 'tertiary'} text-white">
+                                <i class="fa ${point.category === 'morality' ? 'fa-heart' : point.category === 'rule' ? 'fa-gavel' : point.category === 'values' ? 'fa-star' : 'fa-university'}"></i>
+                            </span>
+                            <h3 class="text-lg font-bold">${point.name}</h3>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-2">${point.categoryName}</p>
+                        <p class="text-gray-700 mb-4">${point.description}</p>
+                        <div class="mb-4">
+                            <h4 class="font-semibold mb-1">深度解读</h4>
+                            <p class="text-gray-700 text-sm">${point.interpretation}</p>
+                        </div>
+                        ${point.video ? `
+                        <div class="flex justify-between">
+                            <button class="play-audio bg-gray-200 text-gray-700 py-1 px-3 rounded hover:bg-gray-300 transition-colors text-sm" data-audio="${point.audio}">
+                                <i class="fa fa-volume-up mr-1"></i> 听讲解
+                            </button>
+                            <button class="show-video bg-primary text-white py-1 px-3 rounded hover:bg-blue-800 transition-colors text-sm" data-video="${point.video}">
+                                <i class="fa fa-play mr-1"></i> 看视频
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+        // 创建信息窗口
+        const infoWindow = new BMapGL.InfoWindow(content, {
+            width: 350,
+            height: 400,
+            title: point.name,
+            offset: new BMapGL.Size(0, -10)
+        });
+
+        // 打开信息窗口
+        map.openInfoWindow(infoWindow, new BMapGL.Point(point.location.lng, point.location.lat));
+
+        // 添加事件监听
+        setTimeout(() => {
+            if (point.audio) {
+                document.querySelectorAll('.play-audio').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const audioUrl = this.getAttribute('data-audio');
+                        playAudio(audioUrl);
+                    });
+                });
+            }
+
+            if (point.video) {
+                document.querySelectorAll('.show-video').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const videoUrl = this.getAttribute('data-video');
+                        showVideo(videoUrl);
+                    });
+                });
+            }
+        }, 100);
+    }
+
+    // 播放音频
+    function playAudio(url) {
+        alert('正在播放音频: ' + url);
+        // 实际项目中可以使用HTML5 Audio API
+    }
+
+    // 显示视频
+    function showVideo(url) {
+        alert('正在播放视频: ' + url);
+        // 实际项目中可以使用HTML5 Video API或弹出视频播放窗口
+    }
+
+    // 分类筛选（同时控制标记和标签的显示）
+    document.querySelectorAll('.category-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const category = this.value;
+            const isChecked = this.checked;
+
+            points.forEach(point => {
+                if (point.category === category) {
+                    if (isChecked) {
+                        map.addOverlay(markers[point.id]);
+                        map.addOverlay(labels[point.id]);
+                    } else {
+                        map.removeOverlay(markers[point.id]);
+                        map.removeOverlay(labels[point.id]);
+                    }
+                }
+            });
+        });
+    });
+
+    // 关键词搜索（同时控制标记和标签的显示）
+    document.getElementById('search-input').addEventListener('input', function() {
+        const keyword = this.value.toLowerCase();
+
+        points.forEach(point => {
+            const match =
+                point.name.toLowerCase().includes(keyword) ||
+                point.description.toLowerCase().includes(keyword) ||
+                point.categoryName.toLowerCase().includes(keyword);
+
+            if (match) {
+                map.addOverlay(markers[point.id]);
+                map.addOverlay(labels[point.id]);
+            } else {
+                // 检查该点所在分类是否被选中
+                const categoryChecked = document.querySelector(`.category-checkbox[value="${point.category}"]`).checked;
+                if (categoryChecked) {
+                    map.removeOverlay(markers[point.id]);
+                    map.removeOverlay(labels[point.id]);
+                }
+            }
+        });
+    });
+
+    // 故事线功能
+    let currentStoryIndex = 0;
+    const storyPoints = points.filter(point => point.storyOrder !== null).sort((a, b) => a.storyOrder - b.storyOrder);
+
+    document.getElementById('story-btn').addEventListener('click', function() {
+        document.getElementById('story-line').classList.add('active');
+        showStoryPoint(0);
+    });
+
+    document.querySelector('.close-story').addEventListener('click', function() {
+        document.getElementById('story-line').classList.remove('active');
+    });
+
+    document.getElementById('prev-story').addEventListener('click', function() {
+        if (currentStoryIndex > 0) {
+            showStoryPoint(currentStoryIndex - 1);
+        }
+    });
+
+    document.getElementById('next-story').addEventListener('click', function() {
+        if (currentStoryIndex < storyPoints.length - 1) {
+            showStoryPoint(currentStoryIndex + 1);
+        }
+    });
+
+    function showStoryPoint(index) {
+        currentStoryIndex = index;
+        const point = storyPoints[index];
+
+        document.getElementById('story-title').textContent = point.name;
+        document.getElementById('story-content').innerHTML = `
+                <img src="${point.image}" alt="${point.name}" class="w-full h-48 object-cover rounded-lg mb-4">
+                <p class="text-gray-700 mb-4">${point.storyDescription}</p>
+                <p class="text-gray-600 text-sm">${point.address}</p>
+            `;
+
+        // 更新进度条
+        const progress = ((index + 1) / storyPoints.length) * 100;
+        document.getElementById('story-progress').style.width = `${progress}%`;
+
+        // 更新导航按钮状态
+        document.getElementById('prev-story').disabled = index === 0;
+        document.getElementById('next-story').innerHTML = index === storyPoints.length - 1 ?
+            '结束旅程 <i class="fa fa-check ml-2"></i>' :
+            '下一站 <i class="fa fa-arrow-right ml-2"></i>';
+
+        // 移动地图到当前点位
+        map.centerAndZoom(new BMapGL.Point(point.location.lng, point.location.lat), 15);
+
+        // 高亮当前点位
+        Object.keys(markers).forEach(key => {
+            const marker = markers[key];
+            if (parseInt(key) === point.id) {
+                marker.setAnimation(BMAP_ANIMATION_BOUNCE);
+            } else {
+                marker.setAnimation(null);
+            }
+        });
+
+        // 如果是最后一个点位，点击下一站按钮关闭故事线
+        if (index === storyPoints.length - 1) {
+            document.getElementById('next-story').addEventListener('click', function() {
+                document.getElementById('story-line').classList.remove('active');
+                // 停止所有动画
+                Object.values(markers).forEach(marker => {
+                    marker.setAnimation(null);
+                });
+            }, { once: true });
+        }
+    }
+
+    // 导航按钮
+    document.getElementById('prev-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng - 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    document.getElementById('next-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng + 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    // 上传按钮
+    document.querySelector('.upload-btn').addEventListener('click', function() {
+        alert('功能开发中：用户可上传自己发现的青县特色点位，经审核后加入地图');
+    });
+
+    // 页面加载完成后初始化
+    window.addEventListener('load', function() {
+        console.log("页面加载完成，开始初始化地图");
+        initMap();
+    });
+</script>
+</body>
+</html>
+    
