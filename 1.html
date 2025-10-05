@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>石家庄市裕华区文化·法治·社区 互动地图</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 百度地图API -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=1.0&type=webgl&ak=I3pCS8RW0RWc4vIqbncA4Puif2m2xEzF"></script>
+    <!-- Tailwindwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#e63946', // 月季红 - 市花特色
+                        secondary: '#1d3557', // 深蓝色 - 现代与稳定
+                        tertiary: '#457b9d', // 天蓝色 - 创新与和谐
+                        quaternary: '#f1faee', // 淡蓝色 - 社区与服务
+                        light: '#f8fafc',
+                        dark: '#1e293b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-blur {
+                backdrop-filter: blur(8px);
+            }
+        }
+    </style>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #map-container {
+            height: 100vh;
+            width: 100%;
+            z-index: 1;
+            position: relative;
+        }
+        .custom-marker {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .info-window {
+            max-width: 350px;
+            overflow: hidden;
+        }
+        .info-window img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+        }
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+        .floating-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            backdrop-filter: blur(8px);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        .category-filter {
+            margin-bottom: 15px;
+        }
+        .category-filter label {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .category-filter label:hover {
+            transform: translateX(5px);
+        }
+        .upload-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .story-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 25px;
+            backdrop-filter: blur(8px);
+            max-width: 500px;
+            display: none;
+        }
+        .story-line.active {
+            display: block;
+        }
+        .close-story {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .progress-bar {
+            height: 4px;
+            background-color: #e2e8f0;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #e63946;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background-color: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+        .prev-btn {
+            left: 20px;
+        }
+        .next-btn {
+            right: 20px;
+        }
+        /* 自定义点位标签样式 - 包含分类标识 */
+        .custom-label {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            white-space: nowrap;
+            border-left: 3px solid;
+        }
+        .category-badge {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 6px;
+            color: white;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<!-- 地图容器 -->
+<div id="map-container"></div>
+
+<!-- 左侧面板 -->
+<div class="floating-panel w-72">
+    <h1 class="text-2xl font-bold text-primary mb-4 text-shadow">裕华区文化·法治·社区</h1>
+    <p class="text-gray-600 mb-6">探索石家庄市裕华区的文化、历史、法治和社区建设成果</p>
+
+    <!-- 分类筛选 -->
+    <div class="category-filter">
+        <h2 class="text-lg font-semibold mb-3 text-dark">维度筛选</h2>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="culture" checked>
+                <span class="category-icon bg-primary text-white">
+                        <i class="fa fa-university"></i>
+                    </span>
+                <span>文化景点</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="rule" checked>
+                <span class="category-icon bg-secondary text-white">
+                        <i class="fa fa-gavel"></i>
+                    </span>
+                <span>法治建设</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="community" checked>
+                <span class="category-icon bg-tertiary text-white">
+                        <i class="fa fa-home"></i>
+                    </span>
+                <span>社区服务</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="history" checked>
+                <span class="category-icon bg-quaternary text-dark">
+                        <i class="fa fa-history"></i>
+                    </span>
+                <span>历史遗迹</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">关键词搜索</h2>
+        <div class="relative">
+            <input type="text" id="search-input" placeholder="输入关键词搜索点位..."
+                   class="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+        </div>
+    </div>
+
+    <!-- 主题故事线 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">主题故事线</h2>
+        <button id="story-btn" class="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center">
+            <i class="fa fa-book mr-2"></i> 探索"裕华文化之旅"
+        </button>
+    </div>
+</div>
+
+<!-- 上传按钮 -->
+<button class="upload-btn bg-primary text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition-colors">
+    <i class="fa fa-plus text-xl"></i>
+</button>
+
+<!-- 故事线弹窗 -->
+<div class="story-line" id="story-line">
+        <span class="close-story text-gray-500 hover:text-gray-700">
+            <i class="fa fa-times"></i>
+        </span>
+    <h2 class="text-2xl font-bold text-primary mb-4" id="story-title">裕华文化之旅</h2>
+    <div class="progress-bar">
+        <div class="progress" id="story-progress" style="width: 0%"></div>
+    </div>
+    <div id="story-content" class="mb-6">
+        <!-- 故事线内容将通过JS动态生成 -->
+    </div>
+    <div class="flex justify-between">
+        <button id="prev-story" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            <i class="fa fa-arrow-left mr-2"></i> 上一站
+        </button>
+        <button id="next-story" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
+            下一站 <i class="fa fa-arrow-right ml-2"></i>
+        </button>
+    </div>
+</div>
+
+<!-- 导航按钮 -->
+<button class="nav-btn prev-btn" id="prev-btn">
+    <i class="fa fa-chevron-left"></i>
+</button>
+<button class="nav-btn next-btn" id="next-btn">
+    <i class="fa fa-chevron-right"></i>
+</button>
+
+<script>
+    // 裕华区坐标：38.00639° N, 114.53139° E
+    // 点位数据
+    const points = [
+        {
+            id: 1,
+            name: "河北美术馆",
+            category: "culture",
+            categoryName: "文化景点",
+            location: {lat: 38.0111, lng: 114.5314}, // 槐安东路113号
+            address: "河北省石家庄市裕华区槐安东路113号",
+            description: "河北美术馆是国家二级博物馆，建筑面积5300平方米，整个院区占地面积16亩。常年举办主题和个人画展，致力于美术创作、艺术理论研究和专业人员培训。",
+            image: "https://p26-doubao-search-sign.byteimg.com/tos-cn-i-6w9my0ksvp/c1ffe2c3042942a2a207c61cb25678cf~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=rMTMEKofw3JbiGtmZ9qXYYpWNKk%3D",
+            video: "",
+            audio: "",
+            interpretation: "河北美术馆作为裕华区重要的文化地标，不仅是艺术作品展示的平台，更是推动区域文化发展、提升市民艺术素养的重要场所。馆内经常举办各类高水平艺术展览，为市民提供了丰富的精神文化食粮。",
+            storyOrder: 1,
+            storyDescription: "我们的裕华文化之旅从河北美术馆开始，这里是国家二级博物馆，常年举办各类高水平艺术展览。作为裕华区重要的文化地标，美术馆不仅展示艺术作品，更是推动区域文化发展、提升市民艺术素养的重要场所。"
+        },
+        {
+            id: 2,
+            name: "河北省民俗博物馆",
+            category: "culture",
+            categoryName: "文化景点",
+            location: {lat: 38.0207, lng: 114.5275}, // 育才街181号
+            address: "河北省石家庄市裕华区育才街181号",
+            description: "河北省民俗博物馆是河北省唯一一家省级民俗类专题博物馆，以收藏古代、近现代民俗文物和民俗资料并进行科学研究、举办陈列展览、弘扬传统文化为主要任务。",
+            image: "https://p26-doubao-search-sign.byteimg.com/labis/a064a7ca27ae849a54d992701358290e~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=2ZylXOuGiZKEL9RKCcTek%2F1maDM%3D",
+            video: "",
+            audio: "",
+            interpretation: "河北省民俗博物馆通过展示丰富的民俗文物和资料，让观众深入了解河北地区的民俗文化和历史传承。馆内收藏了大量反映河北地区民间生活、生产、信仰、节日等方面的文物，是研究和传承河北民俗文化的重要基地。",
+            storyOrder: 2,
+            storyDescription: "第二站我们来到河北省民俗博物馆，这里是河北省唯一一家省级民俗类专题博物馆。馆内收藏了大量反映河北地区民间生活、生产、信仰、节日等方面的文物，通过展示丰富的民俗文物和资料，让观众深入了解河北地区的民俗文化和历史传承。"
+        },
+        {
+            id: 3,
+            name: "石家庄大剧院",
+            category: "culture",
+            categoryName: "文化景点",
+            location: {lat: 38.0028, lng: 114.5467}, // 塔南路72号
+            address: "河北省石家庄市裕华区塔南路72号",
+            description: "石家庄大剧院是省会自新中国成立以来，由石家庄市政府建设的功能较大、投资较多、档次较高、具有国际一流水准的演出场馆，是石家庄市标志性的文化设施和文艺活动的重要场所。",
+            image: "https://p11-doubao-search-sign.byteimg.com/labis/b0f7233ebff61f3b2d3df9f014606844~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=E8a7QOp%2BhoCPV3rFMr0k1byAlL8%3D",
+            video: "",
+            audio: "",
+            interpretation: "石家庄大剧院总投资达到4.3亿元，包括1200座大剧场和600座多功能剧场各一座，以及排练、办公场所、餐厅、招待所、展厅、教学基地、停车场和仓储用房。大剧院的建成，极大地提升了石家庄的文化品位和城市形象，为市民提供了欣赏高水平文艺演出的场所。",
+            storyOrder: 3,
+            storyDescription: "第三站我们来到石家庄大剧院，这是一座具有国际一流水准的演出场馆，总投资达到4.3亿元。大剧院包括1200座大剧场和600座多功能剧场，以及排练、办公场所、餐厅、展厅等设施。它的建成，极大地提升了石家庄的文化品位和城市形象。"
+        },
+        {
+            id: 4,
+            name: "世纪公园",
+            category: "culture",
+            categoryName: "文化景点",
+            location: {lat: 38.0107, lng: 114.5467}, // 体育南大街267号
+            address: "河北省石家庄市裕华区体育南大街267号",
+            description: "世纪公园位于石家庄市区东南部，北临槐安路、西临体育南大街，总面积达24.67公顷，是一座大型城市文化休闲娱乐的综合性公园。获联合国人文环境工程奖的民心河从公园中间穿过。",
+            image: "https://p26-doubao-search-sign.byteimg.com/labis/e45bd3a7f426d1e4df4bc00b44269c2c~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=mZAdHaN9rPjmHi%2FWs%2FpwBVRF8lw%3D",
+            video: "",
+            audio: "",
+            interpretation: "世纪公园是裕华区最具代表性的城市公园之一，园内不仅有美丽的自然风光，还有丰富的文化娱乐设施。公园内的石家庄电视塔更是城市地标，塔高280米，集旅游、观光、餐饮、娱乐、广播电视发射于一体。世纪公园为市民提供了休闲娱乐、锻炼身体、感受自然的好去处。",
+            storyOrder: 4,
+            storyDescription: "第四站我们来到世纪公园，这是一座大型城市文化休闲娱乐的综合性公园，总面积达24.67公顷。园内的石家庄电视塔是城市地标，塔高280米，集旅游、观光、餐饮、娱乐、广播电视发射于一体。世纪公园为市民提供了休闲娱乐、感受自然的好去处。"
+        },
+        {
+            id: 5,
+            name: "盛邦花园第二社区",
+            category: "rule",
+            categoryName: "法治建设",
+            location: {lat: 38.0000, lng: 114.5200}, // 仓兴街10号
+            address: "河北省石家庄市裕华区仓兴街10号",
+            description: "盛邦花园第二社区深入学习贯彻党的二十届三中全会精神，以独特的法治实践夯实社区治理工作。社区协同法官、民警、调解员、法学会法治护航小分队以及首席法律咨询专家等法治力量，构建了'联动+'调解机制。",
+            image: "https://p26-doubao-search-sign.byteimg.com/tos-cn-i-6w9my0ksvp/527ea8c039f34545812219ca03545a1d~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=7TeALHbCVSPHKf0QDgJ5H3GH1Xc%3D",
+            video: "",
+            audio: "",
+            interpretation: "盛邦花园第二社区是石家庄市创新基层治理新模式的典范。社区通过打造特色的普法模式和浓厚的法治文化，引入'普法机器人'等智能化法律服务工具，为居民提供全方位、多层次的法律服务。社区还组建了'法治护航小分队'，开展法治宣讲、以案释法等活动，提升居民的法治观念和法律意识。",
+            storyOrder: 5,
+            storyDescription: "第五站我们来到盛邦花园第二社区，这里是石家庄市创新基层治理新模式的典范。社区通过打造特色的普法模式和浓厚的法治文化，引入'普法机器人'等智能化法律服务工具，为居民提供全方位、多层次的法律服务。社区还组建了'法治护航小分队'，开展法治宣讲、以案释法等活动。"
+        },
+        {
+            id: 6,
+            name: "裕华区人民政府",
+            category: "rule",
+            categoryName: "法治建设",
+            location: {lat: 38.0064, lng: 114.5314}, // 塔南路169号
+            address: "河北省石家庄市裕华区塔南路169号",
+            description: "裕华区人民政府是裕华区最高行政机关，负责贯彻落实党中央、国务院和省委、省政府的决策部署，组织实施法律法规和政策，推动区域经济社会发展，改善民生福祉，维护社会稳定。",
+            image: "https://p11-doubao-search-sign.byteimg.com/pgc-image/21c720e762f94bbe855f4e308a76c0af~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764404476&x-signature=QNyihkUVMHDxfLCtveJlhQez43s%3D",
+            video: "",
+            audio: "",
+            interpretation: "裕华区人民政府在推进法治政府建设方面取得了显著成效，成功创建第三批全省法治政府建设示范区。区政府坚持以习近平新时代中国特色社会主义思想为指导，认真学习贯彻习近平法治思想，扎实推动法治政府建设各项工作落地落实，为区域经济社会高质量发展提供了有力的法治保障。",
+            storyOrder: null
+        },
+        {
+            id: 7,
+            name: "尖岭古墓",
+            category: "history",
+            categoryName: "历史遗迹",
+            location: {lat: 38.0200, lng: 114.5300}, // 尖岭村
+            address: "河北省石家庄市裕华区尖岭村",
+            description: "尖岭古墓是汉代至北朝时期的大型古墓，村民俗称'大疙瘩'。因墓丘高大且呈圆锥形，故称'尖陵'，后演变成'尖岭'。2008年底，尖岭古墓被列入河北省第五批文物保护单位名单。",
+            image: "https://p26-doubao-search-sign.byteimg.com/labis/5ad3b16d25dca368272234409f39fffd~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=4bWheQQWBzJJ19IRRon3RmCBvqI%3D",
+            video: "",
+            audio: "",
+            interpretation: "尖岭古墓是石家庄市区内保留较少的几座古墓葬之一，这在省城中心非常罕见。根据封土包含物断定为汉墓，具有重要的历史价值和考古价值。尖岭古墓的保护和研究，对于了解石家庄地区汉代至北朝时期的历史文化具有重要意义。",
+            storyOrder: null
+        },
+        {
+            id: 8,
+            name: "孙村火神庙",
+            category: "history",
+            categoryName: "历史遗迹",
+            location: {lat: 38.0000, lng: 114.5100}, // 建设南大街233号
+            address: "河北省石家庄市裕华区建设南大街233号",
+            description: "孙村火神庙始建于明仁宗洪熙元年，是石家庄一带唯一的一座火神庙。庙内火神紫脸红髯红发紫袍，一手持铜一手托赤蛇，身后饰以火苗围成的光环，大殿壁画除日值皮、时值皮外均与火的故事有关。",
+            image: "https://p26-doubao-search-sign.byteimg.com/tos-cn-i-xv4ileqgde/b94d95e290c5427d92fa477211c0c7cc~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=X%2BxzKa6d70yVJ3Fro6FrKt1jWwQ%3D",
+            video: "",
+            audio: "",
+            interpretation: "孙村火神庙庙会为阴历四月二十八日，是石家庄地区重要的民俗活动。庙会上有各种民间花会、杂耍表演，以及商品交易活动，热闹非凡。孙村火神庙不仅是宗教信仰的场所，也是传承和展示地方民俗文化的重要平台。",
+            storyOrder: null
+        },
+        {
+            id: 9,
+            name: "裕华区社区服务中心",
+            category: "community",
+            categoryName: "社区服务",
+            location: {lat: 38.0100, lng: 114.5300}, // 体育南大街356号
+            address: "河北省石家庄市裕华区体育南大街356号",
+            description: "裕华区社区服务中心是为辖区居民提供各类服务的综合性机构，主要提供民政、社保、计生、卫生、文化、教育等方面的服务。中心设有多个服务窗口，为居民提供便捷、高效的一站式服务。",
+            image: "https://p26-doubao-search-sign.byteimg.com/pgc-image/45cb7a8d4528442ea18f0496f85b85ff~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=2YIcYwHkQbFqrh5oeffUj79ohvg%3D",
+            video: "",
+            audio: "",
+            interpretation: "裕华区社区服务中心致力于为居民提供全方位、多层次的服务，不断完善服务功能，提高服务质量。中心不仅提供各项行政服务，还组织开展各类社区活动，促进邻里交流，增强社区凝聚力，是构建和谐社区的重要平台。",
+            storyOrder: null
+        },
+        {
+            id: 10,
+            name: "裕园",
+            category: "culture",
+            categoryName: "文化景点",
+            location: {lat: 38.0300, lng: 114.4900}, // 裕华西路63号
+            address: "河北省石家庄市裕华区裕华西路63号",
+            description: "裕园是一座以古典江南园林为主题的文化游园，占地6400平方米。园内拥有亭台廊榭、山石水景，主要景观节点包括迎贤堂、不系舟、芙蓉榭、待霜亭等，让人仿佛置身江南水乡。",
+            image: "https://p26-doubao-search-sign.byteimg.com/labis/fbf90e6a442060a217a91448691a60c5~tplv-be4g95zd3a-image.jpeg?rk3s=542c0f93&x-expires=1764840958&x-signature=mNHhIwCasTHAyQ7Y0%2B%2BbsI9K8y0%3D",
+            video: "",
+            audio: "",
+            interpretation: "裕园的设计巧妙利用了民心河沿线地形，入口为江南门楼形式，采用苏式马头墙的组合体。园内两座内向围合的小院落，以小桥流水、假山叠石为特色，体现了小中见大、自然雅朴的园林意境。裕园为市民提供了一个闹中取静、品味江南园林之美的好去处。",
+            storyOrder: null
+        }
+    ];
+
+    // 定义颜色映射
+    const categoryColors = {
+        culture: '#e63946', // 红色 - 文化景点
+        rule: '#1d3557',    // 深蓝色 - 法治建设
+        community: '#457b9d', // 天蓝色 - 社区服务
+        history: '#f1faee'  // 淡蓝色 - 历史遗迹
+    };
+
+    // 定义图标映射
+    const categoryIcons = {
+        culture: 'fa-university',
+        rule: 'fa-gavel',
+        community: 'fa-home',
+        history: 'fa-history'
+    };
+
+    // 初始化地图
+    var map;
+    function initMap() {
+        try {
+            map = new BMapGL.Map("map-container");
+            var point = new BMapGL.Point(114.53139, 38.00639); // 裕华区中心点
+            map.centerAndZoom(point, 13);
+            map.enableScrollWheelZoom(true);
+            console.log("地图初始化成功");
+
+            // 地图加载完成后创建点位标记
+            map.addEventListener('tilesloaded', function() {
+                console.log("地图加载完成，开始创建点位标记");
+                createMarkers();
+            });
+        } catch (error) {
+            console.error("地图初始化失败:", error);
+            alert("地图加载失败: " + error.message);
+        }
+    }
+
+    // 创建点位标记和带分类标识的标签
+    const markers = {};
+    const labels = {}; // 存储标签引用
+    function createMarkers() {
+        try {
+            points.forEach(point => {
+                // 增大图标尺寸以确保显示完整
+                const iconSize = new BMapGL.Size(30, 40);
+                const icon = new BMapGL.Icon("http://api.map.baidu.com/img/markers.png", iconSize, {
+                    offset: new BMapGL.Size(15, 40), // 调整偏移量确保图标底部对准坐标点
+                    imageOffset: new BMapGL.Size(0, 0 - 40 * 0) // 默认使用红色图标
+                });
+
+                // 根据类别设置不同颜色
+                const iconColor = categoryColors[point.category];
+                if (iconColor === '#e63946') { // 红色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 0));
+                } else if (iconColor === '#1d3557') { // 深蓝色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 1));
+                } else if (iconColor === '#457b9d') { // 天蓝色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 2));
+                } else if (iconColor === '#f1faee') { // 淡蓝色
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 3));
+                }
+
+                // 创建标记
+                const marker = new BMapGL.Marker(new BMapGL.Point(point.location.lng, point.location.lat), {
+                    icon: icon
+                });
+
+                // 创建带分类标识的自定义标签
+                // 使用HTML内容创建包含分类图标的标签
+                const labelContent = `
+                    <div class="custom-label" style="border-left-color: ${iconColor}">
+                        <span class="category-badge" style="background-color: ${iconColor}">
+                            <i class="fa ${categoryIcons[point.category]}"></i>
+                        </span>
+                        ${point.name}
+                    </div>
+                `;
+
+                const label = new BMapGL.Label(labelContent, {
+                    offset: new BMapGL.Size(-80, 40), // 标签位置在图标下方
+                    position: new BMapGL.Point(point.location.lng, point.location.lat)
+                });
+
+                // 设置标签样式，允许HTML内容
+                label.setStyle({
+                    border: "none",
+                    padding: "0",
+                    margin: "0",
+                    zIndex: "100"
+                });
+                label.setContent(labelContent); // 再次设置内容以确保HTML生效
+
+                // 添加点击事件
+                marker.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+                // 标签也可点击
+                label.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+
+                // 添加到地图
+                map.addOverlay(marker);
+                map.addOverlay(label);
+
+                // 保存标记和标签引用
+                markers[point.id] = marker;
+                labels[point.id] = label;
+            });
+            console.log("点位标记创建成功，共创建", points.length, "个点位");
+        } catch (error) {
+            console.error("创建点位标记失败:", error);
+            alert("点位加载失败: " + error.message);
+        }
+    }
+
+    // 显示信息窗口
+    function showInfoWindow(point) {
+        // 创建信息窗口内容
+        const content = `
+                <div class="info-window">
+                    <img src="${point.image}" alt="${point.name}">
+                    <div class="p-4">
+                        <div class="flex items-center mb-2">
+                            <span class="category-icon bg-${point.category === 'culture' ? 'primary' : point.category === 'rule' ? 'secondary' : point.category === 'community' ? 'tertiary' : 'quaternary'} text-${point.category === 'history' ? 'dark' : 'white'}">
+                                <i class="fa ${point.category === 'culture' ? 'fa-university' : point.category === 'rule' ? 'fa-gavel' : point.category === 'community' ? 'fa-home' : 'fa-history'}"></i>
+                            </span>
+                            <h3 class="text-lg font-bold">${point.name}</h3>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-2">${point.categoryName}</p>
+                        <p class="text-gray-700 mb-4">${point.description}</p>
+                        <div class="mb-4">
+                            <h4 class="font-semibold mb-1">深度解读</h4>
+                            <p class="text-gray-700 text-sm">${point.interpretation}</p>
+                        </div>
+                        ${point.video ? `
+                        <div class="flex justify-between">
+                            <button class="play-audio bg-gray-200 text-gray-700 py-1 px-3 rounded hover:bg-gray-300 transition-colors text-sm" data-audio="${point.audio}">
+                                <i class="fa fa-volume-up mr-1"></i> 听讲解
+                            </button>
+                            <button class="show-video bg-primary text-white py-1 px-3 rounded hover:bg-red-700 transition-colors text-sm" data-video="${point.video}">
+                                <i class="fa fa-play mr-1"></i> 看视频
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+        // 创建信息窗口
+        const infoWindow = new BMapGL.InfoWindow(content, {
+            width: 350,
+            height: 400,
+            title: point.name,
+            offset: new BMapGL.Size(0, -10)
+        });
+
+        // 打开信息窗口
+        map.openInfoWindow(infoWindow, new BMapGL.Point(point.location.lng, point.location.lat));
+
+        // 添加事件监听
+        setTimeout(() => {
+            if (point.audio) {
+                document.querySelectorAll('.play-audio').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const audioUrl = this.getAttribute('data-audio');
+                        playAudio(audioUrl);
+                    });
+                });
+            }
+
+            if (point.video) {
+                document.querySelectorAll('.show-video').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const videoUrl = this.getAttribute('data-video');
+                        showVideo(videoUrl);
+                    });
+                });
+            }
+        }, 100);
+    }
+
+    // 播放音频
+    function playAudio(url) {
+        alert('正在播放音频: ' + url);
+        // 实际项目中可以使用HTML5 Audio API
+    }
+
+    // 显示视频
+    function showVideo(url) {
+        alert('正在播放视频: ' + url);
+        // 实际项目中可以使用HTML5 Video API或弹出视频播放窗口
+    }
+
+    // 分类筛选（同时控制标记和标签的显示）
+    document.querySelectorAll('.category-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const category = this.value;
+            const isChecked = this.checked;
+
+            points.forEach(point => {
+                if (point.category === category) {
+                    if (isChecked) {
+                        map.addOverlay(markers[point.id]);
+                        map.addOverlay(labels[point.id]);
+                    } else {
+                        map.removeOverlay(markers[point.id]);
+                        map.removeOverlay(labels[point.id]);
+                    }
+                }
+            });
+        });
+    });
+
+    // 关键词搜索（同时控制标记和标签的显示）
+    document.getElementById('search-input').addEventListener('input', function() {
+        const keyword = this.value.toLowerCase();
+
+        points.forEach(point => {
+            const match =
+                point.name.toLowerCase().includes(keyword) ||
+                point.description.toLowerCase().includes(keyword) ||
+                point.categoryName.toLowerCase().includes(keyword);
+
+            if (match) {
+                map.addOverlay(markers[point.id]);
+                map.addOverlay(labels[point.id]);
+            } else {
+                // 检查该点所在分类是否被选中
+                const categoryChecked = document.querySelector(`.category-checkbox[value="${point.category}"]`).checked;
+                if (categoryChecked) {
+                    map.removeOverlay(markers[point.id]);
+                    map.removeOverlay(labels[point.id]);
+                }
+            }
+        });
+    });
+
+    // 故事线功能
+    let currentStoryIndex = 0;
+    const storyPoints = points.filter(point => point.storyOrder !== null).sort((a, b) => a.storyOrder - b.storyOrder);
+
+    document.getElementById('story-btn').addEventListener('click', function() {
+        document.getElementById('story-line').classList.add('active');
+        showStoryPoint(0);
+    });
+
+    document.querySelector('.close-story').addEventListener('click', function() {
+        document.getElementById('story-line').classList.remove('active');
+    });
+
+    document.getElementById('prev-story').addEventListener('click', function() {
+        if (currentStoryIndex > 0) {
+            showStoryPoint(currentStoryIndex - 1);
+        }
+    });
+
+    document.getElementById('next-story').addEventListener('click', function() {
+        if (currentStoryIndex < storyPoints.length - 1) {
+            showStoryPoint(currentStoryIndex + 1);
+        }
+    });
+
+    function showStoryPoint(index) {
+        currentStoryIndex = index;
+        const point = storyPoints[index];
+
+        document.getElementById('story-title').textContent = point.name;
+        document.getElementById('story-content').innerHTML = `
+                <img src="${point.image}" alt="${point.name}" class="w-full h-48 object-cover rounded-lg mb-4">
+                <p class="text-gray-700 mb-4">${point.storyDescription}</p>
+                <p class="text-gray-600 text-sm">${point.address}</p>
+            `;
+
+        // 更新进度条
+        const progress = ((index + 1) / storyPoints.length) * 100;
+        document.getElementById('story-progress').style.width = `${progress}%`;
+
+        // 更新导航按钮状态
+        document.getElementById('prev-story').disabled = index === 0;
+        document.getElementById('next-story').innerHTML = index === storyPoints.length - 1 ?
+            '结束旅程 <i class="fa fa-check ml-2"></i>' :
+            '下一站 <i class="fa fa-arrow-right ml-2"></i>';
+
+        // 移动地图到当前点位
+        map.centerAndZoom(new BMapGL.Point(point.location.lng, point.location.lat), 15);
+
+        // 高亮当前点位
+        Object.keys(markers).forEach(key => {
+            const marker = markers[key];
+            if (parseInt(key) === point.id) {
+                marker.setAnimation(BMAP_ANIMATION_BOUNCE);
+            } else {
+                marker.setAnimation(null);
+            }
+        });
+
+        // 如果是最后一个点位，点击下一站按钮关闭故事线
+        if (index === storyPoints.length - 1) {
+            document.getElementById('next-story').addEventListener('click', function() {
+                document.getElementById('story-line').classList.remove('active');
+                // 停止所有动画
+                Object.values(markers).forEach(marker => {
+                    marker.setAnimation(null);
+                });
+            }, { once: true });
+        }
+    }
+
+    // 导航按钮
+    document.getElementById('prev-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng - 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    document.getElementById('next-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng + 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    // 上传按钮
+    document.querySelector('.upload-btn').addEventListener('click', function() {
+        alert('功能开发中：用户可上传自己发现的裕华区特色点位，经审核后加入地图');
+    });
+
+    // 页面加载完成后初始化
+    window.addEventListener('load', function() {
+        console.log("页面加载完成，开始初始化地图");
+        initMap();
+    });
+</script>
+</body>
+</html>
