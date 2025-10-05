@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雄县学术·伦理·法治 互动地图</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 百度地图API -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=1.0&type=webgl&ak=ZMdNKqgDD1tSr0VBhHH0ejhln1Sd7Nyp"></script>
+    <!-- Tailwindwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af', // 蓝色 - 法治与新区规划
+                        secondary: '#b91c1c', // 红色 - 红色文化传承
+                        tertiary: '#065f46', // 绿色 - 生态保护
+                        quaternary: '#92400e', // 棕色 - 非遗文化
+                        light: '#f8fafc',
+                        dark: '#1e293b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-blur {
+                backdrop-filter: blur(8px);
+            }
+        }
+    </style>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #map-container {
+            height: 100vh;
+            width: 100%;
+            z-index: 1;
+            position: relative;
+        }
+        .custom-marker {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+        .custom-marker:hover {
+            transform: scale(1.2);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .info-window {
+            max-width: 350px;
+            overflow: hidden;
+        }
+        .info-window img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+        }
+        .category-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 8px;
+        }
+        .floating-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 20px;
+            backdrop-filter: blur(8px);
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+        }
+        .category-filter {
+            margin-bottom: 15px;
+        }
+        .category-filter label {
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .category-filter label:hover {
+            transform: translateX(5px);
+        }
+        .upload-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .story-line {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            padding: 25px;
+            backdrop-filter: blur(8px);
+            max-width: 500px;
+            display: none;
+        }
+        .story-line.active {
+            display: block;
+        }
+        .close-story {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        .progress-bar {
+            height: 4px;
+            background-color: #e2e8f0;
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #1e40af;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover {
+            background-color: white;
+            transform: translateY(-50%) scale(1.1);
+        }
+        .prev-btn {
+            left: 20px;
+        }
+        .next-btn {
+            right: 20px;
+        }
+        /* 自定义点位标签样式 - 包含分类标识 */
+        .custom-label {
+            display: inline-flex;
+            align-items: center;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: 500;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+            white-space: nowrap;
+            border-left: 3px solid;
+        }
+        .category-badge {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 6px;
+            color: white;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+<!-- 地图容器 -->
+<div id="map-container"></div>
+
+<!-- 左侧面板 -->
+<div class="floating-panel w-72">
+    <h1 class="text-2xl font-bold text-primary mb-4 text-shadow">雄县学术·伦理·法治</h1>
+    <p class="text-gray-600 mb-6">探索雄县"雄安新区核心区·法治文明城"品牌建设与实践案例</p>
+
+    <!-- 分类筛选 -->
+    <div class="category-filter">
+        <h2 class="text-lg font-semibold mb-3 text-dark">维度筛选</h2>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="redCulture" checked>
+                <span class="category-icon bg-secondary text-white">
+                        <i class="fa fa-flag"></i>
+                    </span>
+                <span>红色文化传承</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="rule" checked>
+                <span class="category-icon bg-primary text-white">
+                        <i class="fa fa-gavel"></i>
+                    </span>
+                <span>法治建设实践</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="values" checked>
+                <span class="category-icon bg-tertiary text-white">
+                        <i class="fa fa-leaf"></i>
+                    </span>
+                <span>核心价值观践行（新区+生态）</span>
+            </label>
+        </div>
+
+        <div class="mb-2">
+            <label class="flex items-center p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                <input type="checkbox" class="category-checkbox mr-3" value="culture" checked>
+                <span class="category-icon bg-quaternary text-white">
+                        <i class="fa fa-university"></i>
+                    </span>
+                <span>非遗特色文化</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- 搜索框 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">关键词搜索</h2>
+        <div class="relative">
+            <input type="text" id="search-input" placeholder="输入关键词搜索点位（如黑陶、法治广场）..."
+                   class="w-full p-2 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+        </div>
+    </div>
+
+    <!-- 主题故事线 -->
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold mb-3 text-dark">主题故事线</h2>
+        <button id="story-btn" class="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors flex items-center justify-center">
+            <i class="fa fa-book mr-2"></i> 探索"雄县新区发展"传承之旅
+        </button>
+    </div>
+</div>
+
+<!-- 上传按钮 -->
+<button class="upload-btn bg-secondary text-white p-3 rounded-full shadow-lg hover:bg-red-700 transition-colors">
+    <i class="fa fa-plus text-xl"></i>
+</button>
+
+<!-- 故事线弹窗 -->
+<div class="story-line" id="story-line">
+        <span class="close-story text-gray-500 hover:text-gray-700">
+            <i class="fa fa-times"></i>
+        </span>
+    <h2 class="text-2xl font-bold text-primary mb-4" id="story-title">雄县新区发展传承之旅</h2>
+    <div class="progress-bar">
+        <div class="progress" id="story-progress" style="width: 0%"></div>
+    </div>
+    <div id="story-content" class="mb-6">
+        <!-- 故事线内容将通过JS动态生成 -->
+    </div>
+    <div class="flex justify-between">
+        <button id="prev-story" class="bg-gray-200 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors">
+            <i class="fa fa-arrow-left mr-2"></i> 上一站
+        </button>
+        <button id="next-story" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition-colors">
+            下一站 <i class="fa fa-arrow-right ml-2"></i>
+        </button>
+    </div>
+</div>
+
+<!-- 导航按钮 -->
+<button class="nav-btn prev-btn" id="prev-btn">
+    <i class="fa fa-chevron-left"></i>
+</button>
+<button class="nav-btn next-btn" id="next-btn">
+    <i class="fa fa-chevron-right"></i>
+</button>
+
+<script>
+    // 雄县坐标：38.9682° N, 116.1275° E（雄安新区核心区）
+    // 点位数据（贴合雄县新区定位、法治、生态、红色、非遗）
+    const points = [
+        {
+            id: 1,
+            name: "雄安新区雄县规划展示中心",
+            category: "values",
+            categoryName: "核心价值观践行（新区+生态）",
+            location: {lat: 38.9682, lng: 116.1275},
+            address: "河北省保定市雄县雄州镇雄安大道",
+            description: "展示雄县在雄安新区规划中的核心定位，包含“生态优先、绿色发展”蓝图、疏解北京非首都功能承接方案、交通枢纽规划（衔接雄安高铁站），通过3D模型直观呈现新区建设成果。",
+            image: "https://picsum.photos/id/1031/800/600", // 规划类图片占位（实际替换为雄县规划馆实景）
+            video: "",
+            audio: "",
+            interpretation: "作为雄安新区“千年大计”的核心承载区，雄县规划展示中心体现“世界眼光、国际标准、中国特色”理念，是核心价值观与新区建设融合的关键载体。截至2024年，中心累计接待考察学习团队1200余批，推动新区规划理念全民知晓。",
+            storyOrder: 1,
+            storyDescription: "第一站从雄县规划展示中心出发，这里是了解雄安新区“千年大计”的窗口——3D模型呈现雄县作为核心区的交通、生态、产业规划，“生态优先、绿色发展”的理念贯穿始终，直观感受核心价值观在新区建设中的引领作用。"
+        },
+        {
+            id: 2,
+            name: "雄县生态公园（白洋淀上游治理示范）",
+            category: "values",
+            categoryName: "核心价值观践行（新区+生态）",
+            location: {lat: 38.9582, lng: 116.1375},
+            address: "河北省保定市雄县雄州镇白洋淀大道东侧",
+            description: "位于白洋淀上游生态敏感区，是雄县“清水润城”工程核心项目，包含湿地修复区、水质净化塘、生态科普馆，通过植被缓冲带、人工湿地技术改善入淀水质，年净化水量超50万立方米。",
+            image: "https://picsum.photos/id/152/800/600", // 生态公园图片占位（实际替换为雄县生态公园实景）
+            video: "",
+            audio: "",
+            interpretation: "雄县作为白洋淀上游重要区域，生态公园是新区“生态先行”理念的缩影。项目实施后，周边区域水质从Ⅳ类提升至Ⅲ类，带动周边3个村发展生态旅游，实现“生态保护+民生改善”双赢，年均接待生态科普游客5万人次。",
+            storyOrder: 2,
+            storyDescription: "第二站来到雄县生态公园，这里是白洋淀上游治理的“样板工程”——人工湿地净化水质、植被缓冲带固土保水，水质从Ⅳ类提升至Ⅲ类。漫步其中，既能感受“绿水青山就是金山银山”的实践，也能了解雄县为白洋淀生态保护作出的贡献。"
+        },
+        {
+            id: 3,
+            name: "雄县人民法院（新区建设专项法庭）",
+            category: "rule",
+            categoryName: "法治建设实践",
+            location: {lat: 38.9782, lng: 116.1175},
+            address: "河北省保定市雄县雄州镇文昌大街18号",
+            description: "设立“雄安新区建设专项法庭”，重点审理涉征地拆迁、项目建设、生态保护、企业疏解类案件，创新“线上调解+线下速裁”模式，2024年受理涉新区案件320件，结案率98%，平均审理周期缩短至28天。",
+            image: "https://picsum.photos/id/48/800/600", // 法院图片占位（实际替换为雄县法院实景）
+            video: "",
+            audio: "",
+            interpretation: "雄县法院围绕新区建设大局，构建“专项法庭+巡回审判+法治宣讲”三维服务体系：针对疏解企业推出“法律咨询前置服务”，为120家北京疏解企业提供合规指导；针对征地拆迁制定“阳光裁判”标准，保障群众合法权益，为新区建设提供坚实法治保障。",
+            storyOrder: 3,
+            storyDescription: "第三站走进雄县人民法院，这里的“新区建设专项法庭”是法治保障的核心——线上调解征地纠纷、为疏解企业提供合规指导，2024年涉新区案件结案率达98%。法官们用专业服务，让“法治”成为新区建设的坚实后盾。"
+        },
+        {
+            id: 4,
+            name: "雄县米家务镇红色文化纪念馆（雁翎队纪念馆）",
+            category: "redCulture",
+            categoryName: "红色文化传承",
+            location: {lat: 39.0082, lng: 116.0875},
+            address: "河北省保定市雄县米家务镇米北村",
+            description: "纪念抗战时期雁翎队在雄县地区的抗日事迹，馆内陈列步枪、手榴弹、通讯设备等实物120余件，展示“水上游击战”“村落保卫战”等历史场景，年均接待党员干部、学生参观10万人次。",
+            image: "https://picsum.photos/id/287/800/600", // 红色纪念馆图片占位（实际替换为雄县雁翎队纪念馆实景）
+            video: "",
+            audio: "",
+            interpretation: "雄县是冀中抗日根据地重要组成部分，米家务镇曾是雁翎队开展水上游击战的核心区域。纪念馆通过“实物+场景还原+口述历史”模式，传承“不畏强敌、保家卫国”的红色精神，2023年被评为“保定市爱国主义教育基地”。",
+            storyOrder: null
+        },
+        {
+            id: 5,
+            name: "雄县黑陶非遗传承基地",
+            category: "culture",
+            categoryName: "非遗特色文化",
+            location: {lat: 38.9482, lng: 116.1075},
+            address: "河北省保定市雄县雄州镇非遗文化产业园内",
+            description: "传承雄县省级非遗“黑陶制作技艺”（可追溯至新石器时代），匠人现场演示“拉坯、雕刻、烧制”全流程，游客可体验黑陶DIY，开发的“雄安元素”文创产品（如雄安高铁站造型黑陶）年销售额超800万元。",
+            image: "https://picsum.photos/id/225/800/600", // 黑陶基地图片占位（实际替换为雄县黑陶基地实景）
+            video: "",
+            audio: "",
+            interpretation: "雄县黑陶技艺是华北地区重要的非遗资源，传承基地通过“非遗+产业+旅游”模式，带动200余名匠人就业，其中30岁以下传承人占比达40%，实现“传统技艺活态传承”。2024年，雄县黑陶入选“雄安新区特色文化符号”。",
+            storyOrder: null
+        },
+        {
+            id: 6,
+            name: "雄县法治文化广场",
+            category: "rule",
+            categoryName: "法治建设实践",
+            location: {lat: 38.9682, lng: 116.1475},
+            address: "河北省保定市雄县雄州镇朝阳大街与雄州路交叉口",
+            description: "以“法治惠民”为主题的市民广场，设置法治雕塑（“宪法书”“公平秤”）、法律条文展示墙（《雄安新区条例》节选）、互动普法屏，每月开展“法治夜市”活动（律师免费咨询、法治文艺演出），年均覆盖群众3万人次。",
+            image: "https://picsum.photos/id/325/800/600", // 法治广场图片占位（实际替换为雄县法治广场实景）
+            video: "",
+            audio: "",
+            interpretation: "法治文化广场将“硬法规”转化为“软景观”，通过群众喜闻乐见的形式普及法律知识。广场设立的“新区法治宣传角”，重点解读《雄安新区规划建设条例》《白洋淀生态环境保护条例》，让法治理念融入市民日常生活。",
+            storyOrder: null
+        },
+        {
+            id: 7,
+            name: "雄县新时代文明实践中心",
+            category: "values",
+            categoryName: "核心价值观践行（新区+生态）",
+            location: {lat: 38.9782, lng: 116.1275},
+            address: "河北省保定市雄县雄州镇文化中心大楼",
+            description: "围绕新区建设需求，开展“新区政策宣讲”“生态保护志愿行”“技能培训（如装配式建筑技术）”等活动，组建20支志愿服务队，2024年累计开展活动300余场，服务群众超5万人次。",
+            image: "https://picsum.photos/id/349/800/600", // 文明实践中心图片占位（实际替换为雄县实践中心实景）
+            video: "",
+            audio: "",
+            interpretation: "雄县新时代文明实践中心以“服务新区、惠及群众”为核心，创新“政策宣讲+技能赋能”模式：针对新区建设者开展安全知识培训，针对村民开展电商直播培训（助力农产品销售），将核心价值观转化为群众可参与、可感知的实践活动。",
+            storyOrder: 4,
+            storyDescription: "最后一站来到雄县新时代文明实践中心，这里是核心价值观落地的“最后一公里”——志愿者们开展新区政策宣讲、生态保护志愿行、装配式建筑技能培训，2024年服务群众超5万人次，让“共建新区、共享成果”的理念深入人心。"
+        },
+        {
+            id: 8,
+            name: "雄安高铁站雄县法治服务站",
+            category: "rule",
+            categoryName: "法治建设实践",
+            location: {lat: 38.9882, lng: 116.1575},
+            address: "河北省保定市雄县雄安高铁站东广场北侧",
+            description: "为疏解企业、旅客提供“一站式”法治服务，包括法律咨询（企业注册、劳动纠纷）、纠纷调解、《雄安新区条例》宣传册发放，2024年提供咨询服务1200余次，调解纠纷80余起。",
+            image: "https://picsum.photos/id/425/800/600", // 高铁站服务站图片占位（实际替换为雄安高铁站服务站实景）
+            video: "",
+            audio: "",
+            interpretation: "依托雄安高铁站交通枢纽优势，法治服务站是雄县“法治前置服务”的创新载体：针对北京疏解企业，提前对接工商、税务、法务需求；针对旅客，提供涉旅纠纷快速调解，展现新区“高效、便捷、法治”的服务形象。",
+            storyOrder: null
+        }
+    ];
+
+    // 定义分类颜色映射（贴合雄县特色）
+    const categoryColors = {
+        redCulture: '#b91c1c', // 红色 - 红色文化传承
+        rule: '#1e40af',       // 蓝色 - 法治建设实践
+        values: '#065f46',     // 绿色 - 核心价值观（新区+生态）
+        culture: '#92400e'     // 棕色 - 非遗特色文化
+    };
+
+    // 定义分类图标映射
+    const categoryIcons = {
+        redCulture: 'fa-flag',
+        rule: 'fa-gavel',
+        values: 'fa-leaf',
+        culture: 'fa-university'
+    };
+
+    // 初始化地图（雄县中心点）
+    var map;
+    function initMap() {
+        try {
+            map = new BMapGL.Map("map-container");
+            var point = new BMapGL.Point(116.1275, 38.9682); // 雄县中心点坐标
+            map.centerAndZoom(point, 13);
+            map.enableScrollWheelZoom(true);
+            console.log("雄县地图初始化成功");
+
+            // 地图加载完成后创建点位标记
+            map.addEventListener('tilesloaded', function() {
+                console.log("地图加载完成，开始创建雄县点位标记");
+                createMarkers();
+            });
+        } catch (error) {
+            console.error("地图初始化失败:", error);
+            alert("地图加载失败: " + error.message);
+        }
+    }
+
+    // 创建点位标记和带分类标识的标签
+    const markers = {};
+    const labels = {}; // 存储标签引用
+    function createMarkers() {
+        try {
+            points.forEach(point => {
+                // 图标尺寸设置
+                const iconSize = new BMapGL.Size(30, 40);
+                const icon = new BMapGL.Icon("http://api.map.baidu.com/img/markers.png", iconSize, {
+                    offset: new BMapGL.Size(15, 40), // 图标底部对准坐标点
+                    imageOffset: new BMapGL.Size(0, 0 - 40 * 0) // 默认红色图标
+                });
+
+                // 根据分类设置图标颜色
+                const iconColor = categoryColors[point.category];
+                if (iconColor === '#b91c1c') { // 红色（红色文化）
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 0));
+                } else if (iconColor === '#1e40af') { // 蓝色（法治）
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 1));
+                } else if (iconColor === '#065f46') { // 绿色（核心价值观/生态）
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 2));
+                } else if (iconColor === '#92400e') { // 棕色（非遗）
+                    icon.setImageOffset(new BMapGL.Size(0, 0 - 40 * 3));
+                }
+
+                // 创建标记
+                const marker = new BMapGL.Marker(new BMapGL.Point(point.location.lng, point.location.lat), {
+                    icon: icon
+                });
+
+                // 创建带分类标识的自定义标签
+                const labelContent = `
+                    <div class="custom-label" style="border-left-color: ${iconColor}">
+                        <span class="category-badge" style="background-color: ${iconColor}">
+                            <i class="fa ${categoryIcons[point.category]}"></i>
+                        </span>
+                        ${point.name}
+                    </div>
+                `;
+
+                const label = new BMapGL.Label(labelContent, {
+                    offset: new BMapGL.Size(-80, 40), // 标签在图标下方
+                    position: new BMapGL.Point(point.location.lng, point.location.lat)
+                });
+
+                // 设置标签样式（允许HTML内容）
+                label.setStyle({
+                    border: "none",
+                    padding: "0",
+                    margin: "0",
+                    zIndex: "100"
+                });
+                label.setContent(labelContent);
+
+                // 点击事件（标记+标签）
+                marker.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+                label.addEventListener('click', function() {
+                    showInfoWindow(point);
+                });
+
+                // 添加到地图
+                map.addOverlay(marker);
+                map.addOverlay(label);
+
+                // 保存引用
+                markers[point.id] = marker;
+                labels[point.id] = label;
+            });
+            console.log("雄县点位标记创建成功，共创建", points.length, "个点位");
+        } catch (error) {
+            console.error("创建点位标记失败:", error);
+            alert("点位加载失败: " + error.message);
+        }
+    }
+
+    // 显示信息窗口
+    function showInfoWindow(point) {
+        // 信息窗口内容（贴合雄县点位特色）
+        const content = `
+                <div class="info-window">
+                    <img src="${point.image}" alt="${point.name}">
+                    <div class="p-4">
+                        <div class="flex items-center mb-2">
+                            <span class="category-icon bg-${
+                                point.category === 'redCulture' ? 'secondary' : 
+                                point.category === 'rule' ? 'primary' : 
+                                point.category === 'values' ? 'tertiary' : 'quaternary'
+                            } text-white">
+                                <i class="fa ${
+                                    point.category === 'redCulture' ? 'fa-flag' : 
+                                    point.category === 'rule' ? 'fa-gavel' : 
+                                    point.category === 'values' ? 'fa-leaf' : 'fa-university'
+                                }"></i>
+                            </span>
+                            <h3 class="text-lg font-bold">${point.name}</h3>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-2">${point.categoryName}</p>
+                        <p class="text-gray-700 mb-4">${point.description}</p>
+                        <div class="mb-4">
+                            <h4 class="font-semibold mb-1">深度解读（雄安特色）</h4>
+                            <p class="text-gray-700 text-sm">${point.interpretation}</p>
+                        </div>
+                        ${point.video ? `
+                        <div class="flex justify-between">
+                            <button class="play-audio bg-gray-200 text-gray-700 py-1 px-3 rounded hover:bg-gray-300 transition-colors text-sm" data-audio="${point.audio}">
+                                <i class="fa fa-volume-up mr-1"></i> 听讲解
+                            </button>
+                            <button class="show-video bg-primary text-white py-1 px-3 rounded hover:bg-blue-800 transition-colors text-sm" data-video="${point.video}">
+                                <i class="fa fa-play mr-1"></i> 看视频
+                            </button>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+
+        // 创建信息窗口
+        const infoWindow = new BMapGL.InfoWindow(content, {
+            width: 350,
+            height: 400,
+            title: point.name,
+            offset: new BMapGL.Size(0, -10)
+        });
+
+        // 打开信息窗口
+        map.openInfoWindow(infoWindow, new BMapGL.Point(point.location.lng, point.location.lat));
+
+        // 音频/视频播放事件（预留功能）
+        setTimeout(() => {
+            if (point.audio) {
+                document.querySelectorAll('.play-audio').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const audioUrl = this.getAttribute('data-audio');
+                        playAudio(audioUrl);
+                    });
+                });
+            }
+
+            if (point.video) {
+                document.querySelectorAll('.show-video').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const videoUrl = this.getAttribute('data-video');
+                        showVideo(videoUrl);
+                    });
+                });
+            }
+        }, 100);
+    }
+
+    // 播放音频（预留功能）
+    function playAudio(url) {
+        alert('正在播放音频: ' + url);
+    }
+
+    // 显示视频（预留功能）
+    function showVideo(url) {
+        alert('正在播放视频: ' + url);
+    }
+
+    // 分类筛选（控制标记+标签显示）
+    document.querySelectorAll('.category-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const category = this.value;
+            const isChecked = this.checked;
+
+            points.forEach(point => {
+                if (point.category === category) {
+                    if (isChecked) {
+                        map.addOverlay(markers[point.id]);
+                        map.addOverlay(labels[point.id]);
+                    } else {
+                        map.removeOverlay(markers[point.id]);
+                        map.removeOverlay(labels[point.id]);
+                    }
+                }
+            });
+        });
+    });
+
+    // 关键词搜索（控制标记+标签显示）
+    document.getElementById('search-input').addEventListener('input', function() {
+        const keyword = this.value.toLowerCase();
+
+        points.forEach(point => {
+            const match =
+                point.name.toLowerCase().includes(keyword) ||
+                point.description.toLowerCase().includes(keyword) ||
+                point.categoryName.toLowerCase().includes(keyword);
+
+            if (match) {
+                map.addOverlay(markers[point.id]);
+                map.addOverlay(labels[point.id]);
+            } else {
+                // 检查分类是否被选中
+                const categoryChecked = document.querySelector(`.category-checkbox[value="${point.category}"]`).checked;
+                if (categoryChecked) {
+                    map.removeOverlay(markers[point.id]);
+                    map.removeOverlay(labels[point.id]);
+                }
+            }
+        });
+    });
+
+    // 故事线功能（雄县新区发展主线）
+    let currentStoryIndex = 0;
+    const storyPoints = points.filter(point => point.storyOrder !== null).sort((a, b) => a.storyOrder - b.storyOrder);
+
+    document.getElementById('story-btn').addEventListener('click', function() {
+        document.getElementById('story-line').classList.add('active');
+        showStoryPoint(0);
+    });
+
+    document.querySelector('.close-story').addEventListener('click', function() {
+        document.getElementById('story-line').classList.remove('active');
+    });
+
+    document.getElementById('prev-story').addEventListener('click', function() {
+        if (currentStoryIndex > 0) {
+            showStoryPoint(currentStoryIndex - 1);
+        }
+    });
+
+    document.getElementById('next-story').addEventListener('click', function() {
+        if (currentStoryIndex < storyPoints.length - 1) {
+            showStoryPoint(currentStoryIndex + 1);
+        }
+    });
+
+    function showStoryPoint(index) {
+        currentStoryIndex = index;
+        const point = storyPoints[index];
+
+        // 更新故事线内容
+        document.getElementById('story-title').textContent = `雄县新区发展之旅 - ${point.name}`;
+        document.getElementById('story-content').innerHTML = `
+                <img src="${point.image}" alt="${point.name}" class="w-full h-48 object-cover rounded-lg mb-4">
+                <p class="text-gray-700 mb-4">${point.storyDescription}</p>
+                <p class="text-gray-600 text-sm">地址：${point.address}</p>
+                <p class="text-gray-600 text-sm mt-2">核心价值：${point.categoryName}</p>
+            `;
+
+        // 更新进度条
+        const progress = ((index + 1) / storyPoints.length) * 100;
+        document.getElementById('story-progress').style.width = `${progress}%`;
+
+        // 更新导航按钮状态
+        document.getElementById('prev-story').disabled = index === 0;
+        document.getElementById('next-story').innerHTML = index === storyPoints.length - 1 ?
+            '结束旅程 <i class="fa fa-check ml-2"></i>' :
+            '下一站 <i class="fa fa-arrow-right ml-2"></i>';
+
+        // 移动地图到当前点位
+        map.centerAndZoom(new BMapGL.Point(point.location.lng, point.location.lat), 15);
+
+        // 高亮当前点位（弹跳动画）
+        Object.keys(markers).forEach(key => {
+            const marker = markers[key];
+            if (parseInt(key) === point.id) {
+                marker.setAnimation(BMAP_ANIMATION_BOUNCE);
+            } else {
+                marker.setAnimation(null);
+            }
+        });
+
+        // 最后一站点击结束
+        if (index === storyPoints.length - 1) {
+            document.getElementById('next-story').addEventListener('click', function() {
+                document.getElementById('story-line').classList.remove('active');
+                Object.values(markers).forEach(marker => {
+                    marker.setAnimation(null);
+                });
+            }, { once: true });
+        }
+    }
+
+    // 地图导航按钮（左右平移）
+    document.getElementById('prev-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng - 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    document.getElementById('next-btn').addEventListener('click', function() {
+        const currentCenter = map.getCenter();
+        const newCenter = new BMapGL.Point(currentCenter.lng + 0.02, currentCenter.lat);
+        map.panTo(newCenter);
+    });
+
+    // 上传按钮（预留功能）
+    document.querySelector('.upload-btn').addEventListener('click', function() {
+        alert('功能开发中：用户可上传雄县新区建设、生态保护、非遗文化相关点位，经审核后加入地图');
+    });
+
+    // 页面加载完成后初始化地图
+    window.addEventListener('load', function() {
+        console.log("页面加载完成，开始初始化雄县地图");
+        initMap();
+    });
+</script>
+</body>
+</html>
