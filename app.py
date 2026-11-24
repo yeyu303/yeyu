@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import inspect
 import hashlib
 import os
 from collections import Counter
@@ -232,8 +233,14 @@ def show_batch():
 
 
 @st.cache_resource(show_spinner="Loading FTIR reference library...")
-def get_library():
-    return ReferenceLibrary()
+def get_library_v2():
+    library = ReferenceLibrary()
+    if 'mode' not in inspect.signature(library.match).parameters:
+        raise RuntimeError(
+            "An outdated FTIR matching module is loaded. Update ftir_matching.py "
+            "and reboot the Streamlit app."
+        )
+    return library
 
 
 def matching_mode(prefix):
@@ -376,7 +383,7 @@ def render_spectral_result(result, prefix):
 
 
 def show_ftir():
-    st.markdown('Match measured FTIR spectra against selected public FTIR-PLASTIC (c4) and FLOPP-e references.')
+
     uploaded, signal, mode = spectral_inputs('ftir')
     key=(upload_identity(uploaded),signal,mode) if uploaded is not None else None
     if st.button('Match Spectrum',type='primary',use_container_width=True,key='run_ftir'):
@@ -386,7 +393,7 @@ def show_ftir():
         else:
             try:
                 with st.spinner('Matching spectrum...'):
-                    result=get_library().match(uploaded.getvalue(),uploaded.name,signal,mode=mode)
+                    result=get_library_v2().match(uploaded.getvalue(),uploaded.name,signal,mode=mode)
                 st.session_state['ftir_result']=(key,result)
             except Exception as exc:
                 st.error(f'Spectral matching failed: {exc}')
@@ -472,7 +479,7 @@ def show_ftir_batch():
         else:
             bar = st.progress(0, text='Matching spectra...')
             try:
-                library = get_library()
+                library = get_library_v2()
                 frame, hits, details = batch_match_spectra(uploaded_files, signal, library,
                     progress=lambda value, text: bar.progress(value, text=text), mode=mode)
                 st.session_state['ftir_batch_result'] = (key, frame, hits, details)
@@ -540,7 +547,7 @@ def show_integrated():
                     predictor=prepare_model()
                     if predictor is not None:
                         pred=predictor.predict(img)
-                        result=get_library().match(spectrum.getvalue(),spectrum.name,signal,mode=mode)
+                        result=get_library_v2().match(spectrum.getvalue(),spectrum.name,signal,mode=mode)
                         st.session_state['integrated_result']=(key,pred,result)
             except Exception as exc:
                 st.error(f'Analysis failed: {exc}')
